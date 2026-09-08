@@ -1,0 +1,98 @@
+name: Verify HOPS
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: hops-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16-bookworm
+        env:
+          POSTGRES_USER: hops_test
+          POSTGRES_DB: hops_test
+          POSTGRES_PASSWORD: ephemeral_ci_database_only
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U hops_test -d hops_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      DATABASE_URL: postgresql://hops_test:ephemeral_ci_database_only@localhost:5432/hops_test?schema=public
+      TEST_DATABASE_URL: postgresql://hops_test:ephemeral_ci_database_only@localhost:5432/hops_test?schema=public
+      APP_URL: http://localhost:3000
+      COOKIE_SECURE: "false"
+      ONE_C_MODE: test
+      NEXT_TELEMETRY_DISABLED: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run db:generate
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm run db:migrate
+      - run: npm run db:seed
+      - run: npm test
+      - name: Build without database credentials
+        run: env -u DATABASE_URL npm run build
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:e2e
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: playwright-report
+          path: |
+            playwright-report/
+            test-results/
+          retention-days: 7
+
+  docker-smoke:
+    needs: verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      POSTGRES_USER: hops
+      POSTGRES_DB: hops
+      POSTGRES_PASSWORD: ephemeral_compose_ci_database_only
+      APP_URL: http://localhost:3000
+      COOKIE_SECURE: "false"
+      ONE_C_MODE: test
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build and start the actual deployment
+        run: docker compose up --build -d
+      - name: Check database-backed application and worker
+        run: |
+          curl --fail --retry 30 --retry-delay 3 --retry-all-errors http://localhost:3000/api/health
+          curl --fail http://localhost:3000/catalog > /dev/null
+          test "$(docker inspect --format '{{.State.Running}}' "$(docker compose ps -q sync-worker)")" = true
+          test "$(docker compose exec -T app id -u)" != 0
+          test "$(docker compose exec -T db psql -U hops -d hops -tAc 'SELECT COUNT(*) FROM "Product"')" = 0
+          test "$(docker compose exec -T db psql -U hops -d hops -tAc 'SELECT COUNT(*) FROM "ShopSettings"')" = 1
+          test "$(curl --silent --output /dev/null --write-out '%{http_code}' http://localhost:3000/admin)" = 307
+      - name: Verify repeatable migrations and seed
+        run: docker compose run --rm migrator
+      - name: Container logs
+        if: always()
+        run: docker compose logs --no-color --tail=150
+      - name: Remove only the disposable CI deployment
+        if: always()
+        run: docker compose down --volumes

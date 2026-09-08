@@ -1,0 +1,276 @@
+generator client {
+  provider = "prisma-client-js"
+}
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+enum Role {
+  CUSTOMER
+  ADMIN
+}
+enum ProductStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+enum OrderStatus {
+  NEW
+  CONFIRMED
+  PREPARING
+  READY
+  COMPLETED
+  CANCELLED
+}
+enum ReviewStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+enum SyncStatus {
+  PENDING
+  RUNNING
+  SUCCESS
+  FAILED
+}
+enum BonusKind {
+  ACCRUAL
+  REDEMPTION
+  REVERSAL
+}
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  name         String
+  phone        String?
+  passwordHash String
+  role         Role     @default(CUSTOMER)
+  externalId   String?  @unique
+  bonusBalance Int      @default(0)
+  bonusUpdatedAt DateTime? @db.Timestamptz(3)
+  createdAt    DateTime @db.Timestamptz(3) @default(now())
+  updatedAt    DateTime @db.Timestamptz(3) @updatedAt
+  sessions     Session[]
+  carts        Cart[]
+  orders       Order[]
+  reviews      Review[]
+  bonuses      BonusOperation[]
+}
+model Session {
+  id        String   @id @default(cuid())
+  tokenHash String   @unique
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime @db.Timestamptz(3)
+  createdAt DateTime @db.Timestamptz(3) @default(now())
+  @@index([expiresAt])
+}
+model RateLimit {
+  key       String   @id
+  count     Int      @default(1)
+  expiresAt DateTime @db.Timestamptz(3)
+  @@index([expiresAt])
+}
+model Product {
+  id          String        @id @default(cuid())
+  externalId  String?       @unique
+  sku         String        @unique
+  slug        String        @unique
+  name        String
+  description String        @default("")
+  category    String
+  volume      String        @default("")
+  price       Int           @default(0)
+  imageUrl    String?
+  isNew       Boolean       @default(false)
+  status      ProductStatus @default(DRAFT)
+  sourceUpdatedAt DateTime? @db.Timestamptz(3)
+  priceUpdatedAt DateTime? @db.Timestamptz(3)
+  createdAt   DateTime @db.Timestamptz(3)      @default(now())
+  updatedAt   DateTime @db.Timestamptz(3)      @updatedAt
+  inventories Inventory[]
+  arrivals    Arrival[]
+  cartItems   CartItem[]
+  orderItems  OrderItem[]
+  @@index([status, category])
+}
+model Warehouse {
+  id          String      @id @default(cuid())
+  externalId  String?     @unique
+  name        String
+  address     String      @default("")
+  pickupEnabled Boolean   @default(false)
+  sourceUpdatedAt DateTime? @db.Timestamptz(3)
+  inventories Inventory[]
+  arrivals    Arrival[]
+  orders      Order[]
+}
+model Inventory {
+  id          String    @id @default(cuid())
+  productId   String
+  warehouseId String
+  quantity    Int       @default(0)
+  reserved    Int       @default(0)
+  sourceUpdatedAt DateTime? @db.Timestamptz(3)
+  updatedAt   DateTime @db.Timestamptz(3)  @updatedAt
+  product     Product   @relation(fields: [productId], references: [id], onDelete: Cascade)
+  warehouse   Warehouse @relation(fields: [warehouseId], references: [id], onDelete: Cascade)
+  @@unique([productId, warehouseId])
+}
+model Arrival {
+  id          String    @id @default(cuid())
+  externalId  String    @unique
+  productId   String
+  warehouseId String
+  expectedAt  DateTime @db.Timestamptz(3)
+  quantity    Int
+  received    Boolean   @default(false)
+  sourceUpdatedAt DateTime? @db.Timestamptz(3)
+  product     Product   @relation(fields: [productId], references: [id], onDelete: Cascade)
+  warehouse   Warehouse @relation(fields: [warehouseId], references: [id], onDelete: Cascade)
+  @@index([expectedAt])
+}
+model Cart {
+  id        String     @id @default(cuid())
+  tokenHash String     @unique
+  userId    String?
+  user      User?      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  items     CartItem[]
+  createdAt DateTime @db.Timestamptz(3)   @default(now())
+  updatedAt DateTime @db.Timestamptz(3)   @updatedAt
+  expiresAt DateTime @db.Timestamptz(3)
+  @@index([expiresAt])
+}
+model CartItem {
+  id        String  @id @default(cuid())
+  cartId    String
+  productId String
+  quantity  Int
+  cart      Cart    @relation(fields: [cartId], references: [id], onDelete: Cascade)
+  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  @@unique([cartId, productId])
+}
+model Order {
+  id          String      @id @default(cuid())
+  number      Int         @unique @default(autoincrement())
+  externalId  String?     @unique
+  checkoutKey String      @unique
+  sourceUpdatedAt DateTime? @db.Timestamptz(3)
+  userId      String
+  warehouseId String
+  name        String
+  phone       String
+  pickupAt    DateTime @db.Timestamptz(3)
+  comment     String      @default("")
+  status      OrderStatus @default(NEW)
+  total       Int
+  createdAt   DateTime @db.Timestamptz(3)    @default(now())
+  updatedAt   DateTime @db.Timestamptz(3)    @updatedAt
+  user        User        @relation(fields: [userId], references: [id])
+  warehouse   Warehouse   @relation(fields: [warehouseId], references: [id])
+  items       OrderItem[]
+  @@index([userId, createdAt])
+  @@index([status, createdAt])
+}
+model OrderItem {
+  id        String  @id @default(cuid())
+  orderId   String
+  productId String
+  name      String
+  sku       String
+  price     Int
+  quantity  Int
+  order     Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product   Product @relation(fields: [productId], references: [id])
+}
+model Review {
+  id        String       @id @default(cuid())
+  userId    String
+  name      String
+  rating    Int
+  text      String
+  status    ReviewStatus @default(PENDING)
+  createdAt DateTime @db.Timestamptz(3)     @default(now())
+  user      User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@index([status, createdAt])
+}
+model ShopSettings {
+  id            String @id @default("main")
+  address       String @default("Москва, ул. Складочная, 1с5")
+  shortAddress  String @default("Москва, ул. Складочная, 1с5")
+  phone         String @default("+7 (495) 125–25–05")
+  email         String @default("hallo@hops-store.ru")
+  hoursWeek     String @default("Пн–Пт: 11:00–22:00")
+  hoursWeekend  String @default("Сб–Вс: 11:00–21:00")
+  announcement  String @default("Самовывоз из магазина — без очереди")
+  pickupOpen    Int    @default(11)
+  pickupClose   Int    @default(21)
+  timezone      String @default("Europe/Moscow")
+  updatedAt     DateTime @db.Timestamptz(3) @updatedAt
+}
+model Document {
+  id        String   @id @default(cuid())
+  slug      String   @unique
+  title     String
+  content   String
+  published Boolean  @default(false)
+  updatedAt DateTime @db.Timestamptz(3) @updatedAt
+}
+model Subscription {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  consentAt DateTime @db.Timestamptz(3) @default(now())
+}
+model BonusOperation {
+  id             String     @id @default(cuid())
+  externalId     String?    @unique
+  idempotencyKey String     @unique
+  userId         String
+  kind           BonusKind
+  amount         Int
+  status         SyncStatus @default(PENDING)
+  description    String
+  createdAt      DateTime @db.Timestamptz(3)   @default(now())
+  user           User       @relation(fields: [userId], references: [id])
+  @@index([userId, createdAt])
+}
+model SyncJob {
+  id          String     @id @default(cuid())
+  kind        String
+  dedupeKey   String     @unique
+  payload     Json
+  status      SyncStatus @default(PENDING)
+  attempts    Int        @default(0)
+  nextRunAt   DateTime @db.Timestamptz(3)   @default(now())
+  lockedAt    DateTime? @db.Timestamptz(3)
+  lockToken   String?
+  error       String?
+  result      Json?
+  createdAt   DateTime @db.Timestamptz(3)   @default(now())
+  updatedAt   DateTime @db.Timestamptz(3)   @updatedAt
+  logs        SyncLog[]
+  @@index([status, nextRunAt])
+}
+model SyncLog {
+  id        String   @id @default(cuid())
+  jobId     String
+  job       SyncJob  @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  level     String
+  message   String
+  createdAt DateTime @db.Timestamptz(3) @default(now())
+  @@index([createdAt])
+}
+model SyncCursor {
+  id        String   @id
+  cursor    String?
+  updatedAt DateTime @db.Timestamptz(3) @updatedAt
+}
+model AuditLog {
+  id        String   @id @default(cuid())
+  actorId   String
+  action    String
+  targetId  String?
+  createdAt DateTime @db.Timestamptz(3) @default(now())
+  @@index([createdAt])
+}
+
