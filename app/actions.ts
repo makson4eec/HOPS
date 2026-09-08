@@ -101,7 +101,7 @@ export async function addToCartAction(_state: ActionState, form: FormData) {
     await serializable(async tx => {
       await tx.$queryRaw`SELECT "id" FROM "Cart" WHERE "id" = ${cart.id} FOR UPDATE`;
       const product = await tx.product.findUnique({ where: { id: productId }, include: { inventories: { where: { warehouse: { pickupEnabled: true } } } } });
-      if (!product || product.status !== "PUBLISHED" || product.price <= 0) throw new UserFacingError("Товар недоступен для заказа.");
+      if (!product || !product.isActive || product.status !== "PUBLISHED" || product.price <= 0) throw new UserFacingError("Товар недоступен для заказа.");
       const current = await tx.cartItem.findUnique({ where: { cartId_productId: { cartId: cart.id, productId } } });
       const nextQuantity = (current?.quantity || 0) + quantity;
       const max = Math.max(0, ...product.inventories.map(stock => stock.quantity - stock.reserved));
@@ -124,7 +124,7 @@ export async function updateCartAction(_state: ActionState, form: FormData) {
       await tx.$queryRaw`SELECT "id" FROM "Cart" WHERE "id" = ${cart.id} FOR UPDATE`;
       if (quantity === 0) await tx.cartItem.deleteMany({ where: { cartId: cart.id, productId } });
       else {
-        const stocks = await tx.inventory.findMany({ where: { productId, warehouse: { pickupEnabled: true }, product: { status: "PUBLISHED" } } });
+        const stocks = await tx.inventory.findMany({ where: { productId, warehouse: { pickupEnabled: true }, product: { status: "PUBLISHED", isActive: true } } });
         if (!stocks.some(stock => stock.quantity - stock.reserved >= quantity)) throw new UserFacingError("Запрошенное количество недоступно.");
         await tx.cartItem.updateMany({ where: { cartId: cart.id, productId }, data: { quantity } });
       }

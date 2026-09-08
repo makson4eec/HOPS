@@ -17,7 +17,7 @@ export async function placeOrder(input: CheckoutInput) {
     if (!warehouse?.pickupEnabled) throw new UserFacingError("Этот пункт самовывоза недоступен.");
     let total = 0;
     for (const item of cart.items) {
-      if (item.product.status !== "PUBLISHED" || item.product.price <= 0 || item.quantity < 1 || item.quantity > 99) throw new UserFacingError(`Проверьте доступность товара «${item.product.name}».`);
+      if (!item.product.isActive || item.product.status !== "PUBLISHED" || item.product.price <= 0 || item.quantity < 1 || item.quantity > 99) throw new UserFacingError(`Проверьте доступность товара «${item.product.name}».`);
       const updated = await tx.$executeRaw`
         UPDATE "Inventory" SET "reserved" = "reserved" + ${item.quantity}, "updatedAt" = NOW()
         WHERE "productId" = ${item.productId} AND "warehouseId" = ${input.warehouseId}

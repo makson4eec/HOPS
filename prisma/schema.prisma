@@ -79,6 +79,14 @@ model Product {
   name        String
   description String        @default("")
   category    String
+  categoryId  String?       @map("category_id")
+  barcode     String?
+  stock       Int           @default(0)
+  country     String?
+  manufacturer String?
+  alcohol     String?
+  isActive    Boolean       @default(true) @map("is_active")
+  source      String        @default("manual")
   volume      String        @default("")
   price       Int           @default(0)
   imageUrl    String?
@@ -93,6 +101,7 @@ model Product {
   cartItems   CartItem[]
   orderItems  OrderItem[]
   @@index([status, category])
+  @@index([source, isActive])
 }
 model Warehouse {
   id          String      @id @default(cuid())

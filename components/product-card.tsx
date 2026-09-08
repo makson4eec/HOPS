@@ -13,13 +13,14 @@ export function availableQuantity(product: Pick<StoreProduct, "inventories">) {
 }
 
 export function ProductStatus({ product }: { product: StoreProduct }) {
-  const available = availableQuantity(product) > 0;
-  const incoming = product.arrivals.some((arrival) => !arrival.received && arrival.quantity > 0);
+  const available = product.source === "1c" ? product.stock > 0 : availableQuantity(product) > 0;
+  const incoming = product.source !== "1c" && product.arrivals.some((arrival) => !arrival.received && arrival.quantity > 0);
   return <span className={`status ${available ? "" : incoming ? "soon" : "out"}`}>{available ? "В наличии" : incoming ? "Ожидается поступление" : "Нет в наличии"}</span>;
 }
 
 export function ProductVisual({ product, priority = false }: { product: Pick<StoreProduct, "name" | "imageUrl">; priority?: boolean }) {
-  return <div className="product-visual">{product.imageUrl && /^\/images\/[a-zA-Z0-9_-]+\.(?:png|jpg|jpeg|webp|avif)$/.test(product.imageUrl) ? <Image src={product.imageUrl} alt={product.name} fill sizes="(max-width: 560px) 90vw, (max-width: 820px) 45vw, 30vw" priority={priority} /> : <span className="product-placeholder"><Icon name="package" /><span>Фотография пока не добавлена</span></span>}</div>;
+  const remote = Boolean(product.imageUrl?.startsWith("https://"));
+  return <div className="product-visual">{product.imageUrl && (remote || /^\/images\/[a-zA-Z0-9_-]+\.(?:png|jpg|jpeg|webp|avif)$/.test(product.imageUrl)) ? <Image src={product.imageUrl} alt={product.name} fill sizes="(max-width: 560px) 90vw, (max-width: 820px) 45vw, 30vw" priority={priority} unoptimized={remote} referrerPolicy="no-referrer" /> : <span className="product-placeholder"><Icon name="package" /><span>Фотография пока не добавлена</span></span>}</div>;
 }
 
 export function ProductCard({ product }: { product: StoreProduct }) {

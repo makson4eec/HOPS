@@ -10,7 +10,7 @@ import { categories, formatDate, money } from "@/lib/constants";
 import { db } from "@/lib/db";
 
 const getProduct = cache((slug: string) => db.product.findFirst({
-  where: { slug, status: "PUBLISHED" },
+  where: { slug, status: "PUBLISHED", isActive: true },
   include: {
     inventories: { include: { warehouse: true } },
     arrivals: { where: { received: false }, include: { warehouse: true }, orderBy: { expectedAt: "asc" } },

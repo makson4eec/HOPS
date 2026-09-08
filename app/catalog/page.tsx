@@ -15,7 +15,7 @@ export default async function CatalogPage({ searchParams }: { searchParams: Prom
   const category = categories.some((item) => item.id === params.category) ? params.category : "all";
   const sort = params.sort === "price-asc" || params.sort === "price-desc" ? params.sort : "newest";
   const requestedPage = Math.max(1, Math.min(10000, Number.parseInt(params.page ?? "1", 10) || 1));
-  const where: Prisma.ProductWhereInput = { status: "PUBLISHED", ...(category === "new" ? { isNew: true } : category !== "all" ? { category } : {}), ...(q ? { OR: [{ name: { contains: q, mode: "insensitive" } }, { description: { contains: q, mode: "insensitive" } }, { sku: { contains: q, mode: "insensitive" } }] } : {}) };
+  const where: Prisma.ProductWhereInput = { status: "PUBLISHED", isActive: true, ...(category === "new" ? { isNew: true } : category !== "all" ? { category } : {}), ...(q ? { OR: [{ name: { contains: q, mode: "insensitive" } }, { description: { contains: q, mode: "insensitive" } }, { sku: { contains: q, mode: "insensitive" } }] } : {}) };
   const count = await db.product.count({ where });
   const pageCount = Math.max(1, Math.ceil(count / 24));
   const currentPage = Math.min(requestedPage, pageCount);

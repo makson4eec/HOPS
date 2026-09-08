@@ -5,7 +5,7 @@ export function proxy(request: NextRequest) {
   const development = process.env.NODE_ENV === "development";
   const csp = [
     "default-src 'self'", "base-uri 'self'", "frame-ancestors 'none'", "object-src 'none'",
-    "form-action 'self'", "img-src 'self' data: blob:", "font-src 'self'", "style-src 'self' 'unsafe-inline'",
+    "form-action 'self'", "img-src 'self' data: blob: https:", "font-src 'self'", "style-src 'self' 'unsafe-inline'",
     `script-src 'self' 'nonce-${nonce}' 'strict-dynamic'${development ? " 'unsafe-eval'" : ""}`,
     `connect-src 'self'${development ? " ws: wss:" : ""}`,
   ].join("; ");

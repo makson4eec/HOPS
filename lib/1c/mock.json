@@ -1,0 +1,8 @@
+{
+  "products": [
+    { "id": "mock-101", "name": "Тестовое пиво HOPS", "category_id": "mock-beer", "sku": "MOCK-101", "barcode": "4600000000101", "price": "199,90", "stock": 12, "description": "Демонстрационный товар для проверки обмена.", "volume": "0,5 л", "country": "Россия", "manufacturer": "Тестовый производитель", "alcohol": "4,5%" },
+    { "id": "mock-102", "name": "Тестовый лимонад HOPS", "category_id": "mock-lemonade", "sku": "MOCK-102", "price": 120, "stock": 0, "volume": "0,33 л", "alcohol": "0%" },
+    { "id": "mock-103", "name": "Тестовые снеки HOPS", "category_id": "mock-snacks", "price": 95.5, "stock": -3, "volume": "100 г" },
+    { "id": "mock-104", "name": "Товар из закрытой категории", "category_id": "mock-private", "price": 500, "stock": 7 }
+  ]
+}
