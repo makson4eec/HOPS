@@ -17,3 +17,5 @@ backups/
 .local-db/
 .DS_Store
 Thumbs.db
+
+.test-data/

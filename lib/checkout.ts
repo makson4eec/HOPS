@@ -1,3 +1,4 @@
+import { canOrder } from "./purchase-policy";
 import { db } from "@/lib/db";
 import { serializable } from "@/lib/orders";
 import { UserFacingError } from "@/lib/security";
@@ -5,7 +6,6 @@ import { UserFacingError } from "@/lib/security";
 export type CheckoutInput = { userId: string; cartId: string; checkoutKey: string; warehouseId: string; name: string; phone: string; pickupAt: Date; comment: string; expectedTotal?: number };
 export async function placeOrder(input: CheckoutInput) {
   return serializable(async tx => {
-    await tx.$queryRaw`SELECT "id" FROM "Cart" WHERE "id" = ${input.cartId} FOR UPDATE`;
     const duplicate = await tx.order.findUnique({ where: { checkoutKey: input.checkoutKey } });
     if (duplicate) {
       if (duplicate.userId !== input.userId) throw new UserFacingError("Обновите страницу оформления заказа.");
@@ -17,12 +17,10 @@ export async function placeOrder(input: CheckoutInput) {
     if (!warehouse?.pickupEnabled) throw new UserFacingError("Этот пункт самовывоза недоступен.");
     let total = 0;
     for (const item of cart.items) {
-      if (!item.product.isActive || item.product.status !== "PUBLISHED" || item.product.price <= 0 || item.quantity < 1 || item.quantity > 99) throw new UserFacingError(`Проверьте доступность товара «${item.product.name}».`);
-      const updated = await tx.$executeRaw`
-        UPDATE "Inventory" SET "reserved" = "reserved" + ${item.quantity}, "updatedAt" = NOW()
-        WHERE "productId" = ${item.productId} AND "warehouseId" = ${input.warehouseId}
-          AND "quantity" - "reserved" >= ${item.quantity}`;
-      if (updated !== 1) throw new UserFacingError(`Недостаточно товара «${item.product.name}» в выбранном магазине.`);
+      if (!canOrder(item.product) || !item.product.isActive || item.product.status !== "PUBLISHED" || item.product.price <= 0 || item.quantity < 1 || item.quantity > 99) throw new UserFacingError(`Проверьте доступность товара «${item.product.name}».`);
+      const stock = await tx.inventory.findUnique({ where: { productId_warehouseId: { productId: item.productId, warehouseId: input.warehouseId } } });
+      if (!stock || stock.quantity - stock.reserved < item.quantity) throw new UserFacingError(`Недостаточно товара «${item.product.name}» в выбранном магазине.`);
+      await tx.inventory.update({ where: { id: stock.id }, data: { reserved: { increment: item.quantity } } });
       total += item.product.price * item.quantity;
     }
     if (!Number.isSafeInteger(total) || total > 2_000_000_000) throw new UserFacingError("Сумма заказа превышает допустимую. Уменьшите количество товаров.");
@@ -34,7 +32,6 @@ export async function placeOrder(input: CheckoutInput) {
     })) } } });
     await tx.cartItem.deleteMany({ where: { cartId: cart.id } });
     await tx.user.update({ where: { id: input.userId }, data: { phone: input.phone } });
-    await tx.syncJob.create({ data: { kind: "ORDER_EXPORT", dedupeKey: `order:${order.id}:NEW`, payload: { orderId: order.id } } });
     return order;
   });
 }

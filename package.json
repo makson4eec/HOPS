@@ -3,25 +3,27 @@
   "version": "3.0.0",
   "private": true,
   "type": "module",
-  "engines": { "node": ">=22.12.0" },
+  "engines": {
+    "node": ">=22.12.0"
+  },
   "scripts": {
     "dev": "next dev",
-    "build": "prisma generate && next build",
-    "start": "next start",
+    "build": "next build",
+    "start": "node --env-file-if-exists=.env scripts/server.mjs",
     "lint": "eslint . --max-warnings=0",
     "typecheck": "tsc --noEmit",
     "test": "node --conditions=react-server --import tsx --test tests/*.test.ts",
     "test:e2e": "playwright test",
-    "db:generate": "prisma generate",
-    "db:local": "node scripts/local-db.mjs",
-    "db:migrate": "prisma migrate deploy",
-    "db:seed": "tsx prisma/seed.ts",
-    "admin:create": "tsx scripts/create-admin.ts",
-    "sync:worker": "tsx scripts/sync-worker.ts"
+    "admin:create": "node --env-file=.env --conditions=react-server --import tsx scripts/create-admin.ts",
+    "sync:worker": "node --env-file=.env --conditions=react-server --import tsx scripts/sync-worker.ts",
+    "backup": "node --env-file=.env --conditions=react-server --import tsx scripts/backup.ts",
+    "restore": "node --env-file=.env --conditions=react-server --import tsx scripts/backup.ts restore",
+    "test:runtime": "node --test tests/runtime/*.test.mjs",
+    "schemas:generate": "node --conditions=react-server --import tsx scripts/generate-schemas.ts"
   },
   "dependencies": {
-    "@prisma/client": "6.19.2",
-    "next": "^16.0.0",
+    "next": "^16.4.0",
+    "proper-lockfile": "^4.1.2",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "server-only": "^0.0.1",
@@ -31,11 +33,11 @@
     "@axe-core/playwright": "^4.10.0",
     "@playwright/test": "^1.55.0",
     "@types/node": "^24.0.0",
+    "@types/proper-lockfile": "^4.1.4",
     "@types/react": "^19.2.0",
     "@types/react-dom": "^19.2.0",
     "eslint": "^9.0.0",
     "eslint-config-next": "^16.0.0",
-    "prisma": "6.19.2",
     "tsx": "^4.20.0",
     "typescript": "^5.9.0"
   }

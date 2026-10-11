@@ -1,6 +1,7 @@
 import { defineConfig, devices } from "@playwright/test";
 
 const baseURL = process.env.PLAYWRIGHT_BASE_URL || "http://localhost:3000";
+if (!process.env.PLAYWRIGHT_BASE_URL) { process.env.HOPS_E2E_LOCAL = "true"; }
 
 export default defineConfig({
   testDir: "./tests/e2e",
@@ -24,6 +25,6 @@ export default defineConfig({
     url: `${baseURL}/api/health`,
     reuseExistingServer: !process.env.CI,
     timeout: 120_000,
-    env: { APP_URL: baseURL, COOKIE_SECURE: "false" },
+    env: { APP_URL: baseURL, COOKIE_SECURE: "false", HOPS_DATA_DIR: process.env.HOPS_DATA_DIR || ".test-data/e2e" },
   },
 });

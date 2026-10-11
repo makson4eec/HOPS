@@ -40,13 +40,12 @@ export async function assertOrigin() {
 }
 export async function rateLimit(scope: string, identifier: string, limit = 10, windowSeconds = 900) {
   const key = tokenHash(`${scope}:${identifier}`);
-  const rows = await db.$queryRaw<{ count: number }[]>`
-    INSERT INTO "RateLimit" ("key", "count", "expiresAt") VALUES (${key}, 1, NOW() + ${windowSeconds} * INTERVAL '1 second')
-    ON CONFLICT ("key") DO UPDATE SET
-      "count" = CASE WHEN "RateLimit"."expiresAt" < NOW() THEN 1 ELSE "RateLimit"."count" + 1 END,
-      "expiresAt" = CASE WHEN "RateLimit"."expiresAt" < NOW() THEN NOW() + ${windowSeconds} * INTERVAL '1 second' ELSE "RateLimit"."expiresAt" END
-    RETURNING "count"`;
-  if (rows[0].count > limit) throw new UserFacingError("Слишком много попыток. Повторите через 15 минут.");
+  const count = await db.$transaction(async tx => {
+    await tx.rateLimit.deleteMany({ where: { expiresAt: { lte: new Date() } } });
+    const row = await tx.rateLimit.upsert({ where: { key }, create: { key, count: 1, expiresAt: new Date(Date.now() + windowSeconds * 1000) }, update: { count: { increment: 1 } } });
+    return row.count;
+  });
+  if (count > limit) throw new UserFacingError("Слишком много попыток. Повторите позже.");
 }
 export async function requestIdentifier() {
   if (process.env.TRUST_PROXY !== "true") return "shared";
@@ -58,7 +57,6 @@ export async function createSession(userId: string, expectedPasswordHash: string
   const token = newToken();
   const expiresAt = new Date(Date.now() + 7 * 86400_000);
   await db.$transaction(async tx => {
-    await tx.$queryRaw`SELECT "id" FROM "User" WHERE "id" = ${userId} FOR UPDATE`;
     const user = await tx.user.findUniqueOrThrow({ where: { id: userId }, select: { passwordHash: true } });
     if (user.passwordHash !== expectedPasswordHash) throw new UserFacingError("Пароль изменился. Войдите снова.");
     if (old) await tx.session.deleteMany({ where: { tokenHash: tokenHash(old) } });

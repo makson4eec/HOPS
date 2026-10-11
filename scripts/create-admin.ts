@@ -10,4 +10,4 @@ async function main() {
   await db.user.create({ data: { email, passwordHash: await hashPassword(password), role: "ADMIN", name: "Администратор" } });
   console.log("Администратор создан. Удалите ADMIN_PASSWORD из окружения.");
 }
-main().catch(() => { console.error("Не удалось создать администратора. Нужны новый ADMIN_EMAIL и ADMIN_PASSWORD от 16 символов; проверьте базу и отсутствие дубликата."); process.exitCode = 1; }).finally(() => db.$disconnect());
+main().catch(() => { console.error("Не удалось создать администратора. Нужны новый ADMIN_EMAIL и ADMIN_PASSWORD от 16 символов; проверьте доступ к приватной папке и отсутствие дубликата."); process.exitCode = 1; }).finally(() => db.$disconnect());

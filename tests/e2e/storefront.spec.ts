@@ -1,24 +1,11 @@
 import { randomUUID } from "node:crypto";
-import { PrismaClient } from "@prisma/client";
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test } from "@playwright/test";
 
 const publicRoutes = ["/", "/catalog", "/assortment", "/availability", "/pickup", "/about", "/contacts", "/reviews", "/legal", "/cart", "/account", "/orders", "/checkout", "/loyalty"];
-const createdCustomerEmails: string[] = [];
 
 test.beforeEach(async ({ context }) => {
   await context.addInitScript(() => sessionStorage.setItem("hops_age_confirmed", "true"));
-});
-
-test.afterAll(async () => {
-  const url = process.env.TEST_DATABASE_URL;
-  if (!url || !createdCustomerEmails.length || new URL(url).pathname !== "/hops_test" || process.env.DATABASE_URL !== url) return;
-  const db = new PrismaClient({ datasourceUrl: url });
-  try {
-    await db.user.deleteMany({ where: { email: { in: createdCustomerEmails } } });
-  } finally {
-    await db.$disconnect();
-  }
 });
 
 for (const route of publicRoutes) {
@@ -119,13 +106,10 @@ test("rejected login preserves email and clears the password", async ({ page }) 
 });
 
 test("customer registration, chosen password length, login and revocation", async ({ page, context }) => {
+  test.skip(process.env.HOPS_E2E_LOCAL !== "true", "Write scenarios require the isolated local test server");
   test.setTimeout(60_000);
-  test.skip(!process.env.TEST_DATABASE_URL, "Registration requires the disposable hops_test database");
-  expect(new URL(process.env.TEST_DATABASE_URL!).pathname).toBe("/hops_test");
-  expect(process.env.DATABASE_URL).toBe(process.env.TEST_DATABASE_URL);
   expect(["localhost", "127.0.0.1", "[::1]"]).toContain(new URL(process.env.PLAYWRIGHT_BASE_URL || "http://localhost:3000").hostname);
   const email = `e2e-${randomUUID()}@example.invalid`;
-  createdCustomerEmails.push(email);
   const password = "1";
   await page.goto("/account");
   const registration = page.locator("form").filter({ has: page.getByRole("button", { name: "Создать аккаунт", exact: true }) });

@@ -1,0 +1,50 @@
+{
+  "schema_version": "1.0",
+  "export_id": "demo-hops-loyalty-20261011-001",
+  "generated_at": "2026-10-11T14:15:00+05:00",
+  "complete": true,
+  "customers": [
+    {
+      "customerId": "DEMO-1C-CUSTOMER-001",
+      "cardId": "DEMO-CARD-1001",
+      "balance": 60,
+      "updatedAt": "2026-10-11T14:10:00+05:00",
+      "operations": [
+        {
+          "operationId": "DEMO-OP-003",
+          "receiptId": "DEMO-CHECK-202",
+          "kind": "REVERSAL",
+          "amount": 15,
+          "createdAt": "2026-10-10T14:00:00+05:00",
+          "status": "SUCCESS",
+          "description": "Возврат ранее списанных бонусов"
+        },
+        {
+          "operationId": "DEMO-OP-002",
+          "receiptId": "DEMO-CHECK-202",
+          "kind": "REDEMPTION",
+          "amount": 15,
+          "createdAt": "2026-10-10T13:05:00+05:00",
+          "status": "SUCCESS",
+          "description": "Списание бонусов при покупке"
+        },
+        {
+          "operationId": "DEMO-OP-001",
+          "receiptId": "DEMO-CHECK-201",
+          "kind": "ACCRUAL",
+          "amount": 60,
+          "createdAt": "2026-10-09T17:15:00+05:00",
+          "status": "SUCCESS",
+          "description": "Начисление после оплаты в магазине"
+        }
+      ]
+    },
+    {
+      "customerId": "DEMO-1C-CUSTOMER-002",
+      "cardId": "DEMO-CARD-1002",
+      "balance": 0,
+      "updatedAt": "2026-10-11T14:10:00+05:00",
+      "operations": []
+    }
+  ]
+}

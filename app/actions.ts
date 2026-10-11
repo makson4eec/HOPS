@@ -3,7 +3,8 @@
 import { cookies } from "next/headers";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { Prisma } from "@prisma/client";
+import { LocalConflictError } from "@/lib/db";
+import { canOrder } from "@/lib/purchase-policy";
 import { z } from "zod";
 import { db } from "@/lib/db";
 import { actionUser, assertOrigin, CART_COOKIE, createSession, rateLimit, requestIdentifier, SESSION_COOKIE } from "@/lib/auth";
@@ -24,8 +25,8 @@ async function run(fn: () => Promise<ActionState>): Promise<ActionState> {
   catch (error) {
     if (error instanceof UserFacingError) return { success: false, message: error.message };
     if (error instanceof z.ZodError) return { success: false, message: error.issues[0]?.message || "Проверьте поля формы." };
-    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") return { success: false, message: "Эти данные уже используются. Проверьте введённые значения." };
-    console.error("Action failed", error instanceof Prisma.PrismaClientKnownRequestError ? error.code : error instanceof Error ? error.name : "UnknownError");
+    if (error instanceof LocalConflictError) return { success: false, message: "Эти данные уже используются. Проверьте введённые значения." };
+    console.error("Action failed", error instanceof Error ? error.name : "UnknownError");
     return { success: false, message: "Не удалось выполнить действие. Повторите немного позже." };
   }
   // Revalidation can unmount the submitting form; navigate before returning its state.
@@ -99,9 +100,8 @@ export async function addToCartAction(_state: ActionState, form: FormData) {
     await rateLimit("cart", await requestIdentifier(), 200);
     const cart = await ensureCart();
     await serializable(async tx => {
-      await tx.$queryRaw`SELECT "id" FROM "Cart" WHERE "id" = ${cart.id} FOR UPDATE`;
       const product = await tx.product.findUnique({ where: { id: productId }, include: { inventories: { where: { warehouse: { pickupEnabled: true } } } } });
-      if (!product || !product.isActive || product.status !== "PUBLISHED" || product.price <= 0) throw new UserFacingError("Товар недоступен для заказа.");
+      if (!product || !canOrder(product) || !product.isActive || product.status !== "PUBLISHED" || product.price <= 0) throw new UserFacingError("Товар недоступен для заказа.");
       const current = await tx.cartItem.findUnique({ where: { cartId_productId: { cartId: cart.id, productId } } });
       const nextQuantity = (current?.quantity || 0) + quantity;
       const max = Math.max(0, ...product.inventories.map(stock => stock.quantity - stock.reserved));
@@ -121,9 +121,10 @@ export async function updateCartAction(_state: ActionState, form: FormData) {
     const productId = z.string().max(100).parse(form.get("productId"));
     const quantity = z.coerce.number().int().min(0).max(99).parse(form.get("quantity"));
     await serializable(async tx => {
-      await tx.$queryRaw`SELECT "id" FROM "Cart" WHERE "id" = ${cart.id} FOR UPDATE`;
       if (quantity === 0) await tx.cartItem.deleteMany({ where: { cartId: cart.id, productId } });
       else {
+        const product = await tx.product.findUnique({ where: { id: productId } });
+        if (!product || !canOrder(product)) throw new UserFacingError("Этот товар можно приобрести только в магазине.");
         const stocks = await tx.inventory.findMany({ where: { productId, warehouse: { pickupEnabled: true }, product: { status: "PUBLISHED", isActive: true } } });
         if (!stocks.some(stock => stock.quantity - stock.reserved >= quantity)) throw new UserFacingError("Запрошенное количество недоступно.");
         await tx.cartItem.updateMany({ where: { cartId: cart.id, productId }, data: { quantity } });
