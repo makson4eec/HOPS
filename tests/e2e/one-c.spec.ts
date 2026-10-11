@@ -1,6 +1,10 @@
 import { PrismaClient } from "@prisma/client";
 import { expect, test } from "@playwright/test";
 
+test.beforeEach(async ({ context }) => {
+  await context.addInitScript(() => sessionStorage.setItem("hops_age_confirmed", "true"));
+});
+
 test("1C authenticated mock sync populates the existing catalog and hides inactive products", async ({ page, request }) => {
   test.skip(process.env.ONE_C_USE_MOCK !== "true" || !process.env.TEST_DATABASE_URL || !process.env.ONE_C_SYNC_SECRET, "Requires a mock-configured server and an isolated hops_test schema");
   const url = new URL(process.env.TEST_DATABASE_URL!);

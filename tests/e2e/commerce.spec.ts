@@ -23,6 +23,8 @@ test("admin publication, pickup checkout, moderation, fulfillment and manual exc
 
   async function login(target: Page, email: string) {
     await target.goto("/account");
+    const ageConfirmation = target.getByRole("button", { name: "Мне есть 18 лет — войти", exact: true });
+    if (await ageConfirmation.isVisible()) await ageConfirmation.click();
     await target.locator("#login-email").fill(email);
     await target.locator("#login-password").fill(password);
     await target.getByRole("button", { name: "Войти", exact: true }).click();
@@ -44,7 +46,9 @@ test("admin publication, pickup checkout, moderation, fulfillment and manual exc
       await form.getByLabel("Название", { exact: true }).fill(tag);
       await form.getByLabel("Артикул", { exact: true }).fill(tag);
       await form.getByLabel("Адрес страницы (латиница)", { exact: true }).fill(tag);
-      await form.getByRole("combobox", { name: "Категория", exact: true }).selectOption("snacks");
+      await form.getByRole("combobox", { name: "Категория", exact: true }).selectOption("kvass");
+      await form.getByRole("combobox", { name: "Цвет пива", exact: true }).selectOption("light");
+      await form.getByRole("combobox", { name: "Фильтрация пива", exact: true }).selectOption("unfiltered");
       await form.getByLabel("Цена, ₽", { exact: true }).fill("123.45");
       await form.getByLabel("Описание", { exact: true }).fill("Техническая запись для проверки магазина. Удаляется после теста.");
       await form.getByRole("combobox", { name: "Склад для изменения остатка", exact: true }).selectOption(warehouseId);
@@ -56,6 +60,8 @@ test("admin publication, pickup checkout, moderation, fulfillment and manual exc
     });
 
     const product = await db.product.findUniqueOrThrow({ where: { sku: tag } });
+    expect(product.beerColor).toBe("light");
+    expect(product.beerFiltration).toBe("unfiltered");
     await test.step("Customer orders two units for pickup at the selected warehouse", async () => {
       await login(page, customer.email);
       await page.goto(`/catalog/${product.slug}`);

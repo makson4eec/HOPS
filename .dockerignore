@@ -16,3 +16,4 @@ coverage
 backups
 .tools
 .test-db
+.local-db

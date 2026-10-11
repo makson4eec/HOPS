@@ -2,6 +2,29 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { hashPassword, verifyPassword, newToken, normalizePhone, parsePrice, safeNext, tokenHash } from "../lib/security";
 import { parsePickup, transitions } from "../lib/orders";
+import { passwordSchema } from "../lib/password";
+
+test("customers choose password length and characters without truncation", async () => {
+  for (const password of ["1", "абв", "   ", "a".repeat(256)]) {
+    assert.equal(passwordSchema.parse(password), password);
+    const hash = await hashPassword(password);
+    assert.equal(await verifyPassword(password, hash), true);
+    assert.equal(await verifyPassword(`${password}x`, hash), false);
+  }
+  assert.throws(() => passwordSchema.parse(""));
+  assert.throws(() => passwordSchema.parse(null));
+});
+
+test("Yekaterinburg pickup stays open until midnight every day", () => {
+  const now = new Date("2026-09-17T05:00:00Z");
+  for (const day of [17, 18, 19, 20, 21, 22, 23]) {
+    assert.equal(parsePickup(`2026-09-${day}T23:45`, "Asia/Yekaterinburg", 11, 24, now).toISOString(), `2026-09-${day}T18:45:00.000Z`);
+  }
+  assert.equal(parsePickup("2026-09-17T11:00", "Asia/Yekaterinburg", 11, 24, now).toISOString(), "2026-09-17T06:00:00.000Z");
+  for (const value of ["2026-09-18T00:00", "2026-09-18T10:59"]) {
+    assert.throws(() => parsePickup(value, "Asia/Yekaterinburg", 11, 24, now), /11:00 до 00:00/);
+  }
+});
 
 test("password hashes use unique salts and reject invalid credentials", async () => {
   const first = await hashPassword("a-long-test-passphrase");

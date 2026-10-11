@@ -6,6 +6,10 @@ import { expect, test } from "@playwright/test";
 const publicRoutes = ["/", "/catalog", "/assortment", "/availability", "/pickup", "/about", "/contacts", "/reviews", "/legal", "/cart", "/account", "/orders", "/checkout", "/loyalty"];
 const createdCustomerEmails: string[] = [];
 
+test.beforeEach(async ({ context }) => {
+  await context.addInitScript(() => sessionStorage.setItem("hops_age_confirmed", "true"));
+});
+
 test.afterAll(async () => {
   const url = process.env.TEST_DATABASE_URL;
   if (!url || !createdCustomerEmails.length || new URL(url).pathname !== "/hops_test" || process.env.DATABASE_URL !== url) return;
@@ -24,6 +28,7 @@ for (const route of publicRoutes) {
     await expect(page.locator("main")).toBeVisible();
     await expect(page.locator("h1")).toHaveCount(1);
     await expect(page).toHaveTitle(/HOPS/i);
+    await expect(page.locator('a[href^="tel:"], a[href^="mailto:"]')).toHaveCount(0);
     await expect(page.locator('meta[name="viewport"]')).toHaveAttribute("content", /width=device-width/);
   });
 }
@@ -33,6 +38,18 @@ test("empty catalog has no invented product cards", async ({ page }) => {
   await expect(page.locator('main a[href^="/catalog/"]')).toHaveCount(0);
   await expect(page.getByRole("button", { name: /в корзину/i })).toHaveCount(0);
   await expect(page.locator("main")).toContainText(/пока|пуст|нет товаров|готовится к открытию/i);
+});
+
+test("store location and daily opening hours replace store contact details", async ({ page }) => {
+  await page.goto("/contacts");
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText("Как нас найти");
+  await expect(page.locator("main")).toContainText("г. Екатеринбург, ул. Библиотечная, 43");
+  await expect(page.locator("main")).toContainText("Пн–Пт: 11:00–00:00");
+  await expect(page.locator("main")).toContainText("Сб–Вс: 11:00–00:00");
+  await expect(page.locator('main a[href^="https://yandex.ru/maps/"]')).toHaveAttribute("href", `https://yandex.ru/maps/?text=${encodeURIComponent("г. Екатеринбург, ул. Библиотечная, 43")}`);
+  await expect(page.locator('a[href^="tel:"], a[href^="mailto:"]')).toHaveCount(0);
+  await expect(page.locator("body")).not.toContainText("Складочная");
+  await expect(page.locator("body")).not.toContainText("hallo@hops-store.ru");
 });
 
 test("unknown product has a missing-page state", async ({ page }) => {
@@ -101,14 +118,15 @@ test("rejected login preserves email and clears the password", async ({ page }) 
   await expect(page.locator("#login-password")).toHaveValue("");
 });
 
-test("customer registration, server session, login and revocation", async ({ page, context }) => {
+test("customer registration, chosen password length, login and revocation", async ({ page, context }) => {
+  test.setTimeout(60_000);
   test.skip(!process.env.TEST_DATABASE_URL, "Registration requires the disposable hops_test database");
   expect(new URL(process.env.TEST_DATABASE_URL!).pathname).toBe("/hops_test");
   expect(process.env.DATABASE_URL).toBe(process.env.TEST_DATABASE_URL);
   expect(["localhost", "127.0.0.1", "[::1]"]).toContain(new URL(process.env.PLAYWRIGHT_BASE_URL || "http://localhost:3000").hostname);
   const email = `e2e-${randomUUID()}@example.invalid`;
   createdCustomerEmails.push(email);
-  const password = `Hops-${randomUUID()}!`;
+  const password = "1";
   await page.goto("/account");
   const registration = page.locator("form").filter({ has: page.getByRole("button", { name: "Создать аккаунт", exact: true }) });
   await registration.getByLabel("Имя", { exact: true }).fill("Проверка E2E");
@@ -136,6 +154,21 @@ test("customer registration, server session, login and revocation", async ({ pag
   await page.getByRole("button", { name: "Войти", exact: true }).click();
   await expect(page.getByRole("button", { name: "Выйти", exact: true })).toBeVisible();
   expect((await context.cookies()).find(({ name }) => name === "hops_session")?.value).not.toBe(session?.value);
+  const longPassword = "я".repeat(256);
+  await page.locator("#account-current-password").fill(password);
+  await page.locator("#account-new-password").fill(longPassword);
+  await page.getByRole("button", { name: "Сменить пароль", exact: true }).click();
+  await expect(page.locator("main").getByRole("status")).toContainText("Пароль изменён");
+  await page.getByRole("button", { name: "Выйти", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Войти", exact: true })).toBeVisible();
+  await page.locator("#login-email").fill(email);
+  await page.locator("#login-password").fill(longPassword);
+  await page.getByRole("button", { name: "Войти", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Выйти", exact: true })).toBeVisible();
+  await page.locator("#account-current-password").fill(longPassword);
+  await page.locator("#account-new-password").fill(password);
+  await page.getByRole("button", { name: "Сменить пароль", exact: true }).click();
+  await expect(page.locator("main").getByRole("status")).toContainText("Пароль изменён");
   await page.getByRole("button", { name: "Выйти", exact: true }).click();
   await expect(page.getByRole("button", { name: "Войти", exact: true })).toBeVisible();
 });

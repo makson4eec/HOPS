@@ -14,5 +14,6 @@ coverage/
 backups/
 .tools/
 .test-db/
+.local-db/
 .DS_Store
 Thumbs.db

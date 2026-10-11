@@ -32,15 +32,18 @@ export async function saveProductAction(_state: ActionState, form: FormData) {
   return run("PRODUCT_SAVE", productId || null, async () => {
     const existing = productId ? await db.product.findUniqueOrThrow({ where: { id: productId } }) : null;
     const status = z.enum(["DRAFT", "PUBLISHED", "ARCHIVED"]).parse(form.get("status"));
+    const category = existing?.externalId ? existing.category : z.string().refine(value => categories.some(c => c.id === value && c.id !== "new"), "Выберите категорию.").parse(form.get("category"));
+    const beerColor = category === "kvass" ? z.enum(["light", "dark", ""]).parse(form.get("beerColor") || "") || null : null;
+    const beerFiltration = beerColor ? z.enum(["filtered", "unfiltered", ""]).parse(form.get("beerFiltration") || "") || null : null;
     if (existing?.externalId) {
-      await db.product.update({ where: { id: existing.id }, data: { status } });
+      await db.product.update({ where: { id: existing.id }, data: { status, beerColor, beerFiltration } });
       return;
     }
     const data = {
       name: z.string().trim().min(2).max(250).parse(form.get("name")),
       sku: z.string().trim().min(1).max(100).parse(form.get("sku")),
       slug: z.string().regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, "Адрес страницы: латинские буквы, цифры и дефис.").max(180).parse(form.get("slug")),
-      category: z.string().refine(value => categories.some(c => c.id === value && c.id !== "new"), "Выберите категорию.").parse(form.get("category")),
+      category, beerColor, beerFiltration,
       price: parsePrice(String(form.get("price") || "")),
       description: z.string().trim().max(20000).parse(form.get("description") || ""),
       volume: z.string().trim().max(100).parse(form.get("volume") || ""),
@@ -78,7 +81,7 @@ export async function saveSettingsAction(_state: ActionState, form: FormData) {
   return run("SETTINGS_SAVE", "main", async () => {
     const data = z.object({
       address: z.string().trim().min(5).max(300), shortAddress: z.string().trim().min(3).max(100),
-      phone: z.string().trim().min(5).max(40), email: z.email().max(254), hoursWeek: z.string().min(3).max(100),
+      hoursWeek: z.string().min(3).max(100),
       hoursWeekend: z.string().min(3).max(100), announcement: z.string().max(200),
       pickupOpen: z.coerce.number().int().min(0).max(23), pickupClose: z.coerce.number().int().min(1).max(24),
       timezone: z.string().max(100).refine(value => { try { new Intl.DateTimeFormat("ru", { timeZone: value }); return true; } catch { return false; } }),

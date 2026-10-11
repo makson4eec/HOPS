@@ -5,7 +5,7 @@ import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { Icon } from "./icon";
 
-const links = [["/catalog", "Каталог"], ["/availability", "Наличие"], ["/pickup", "Самовывоз"], ["/loyalty", "Бонусы"], ["/reviews", "Отзывы"], ["/contacts", "Контакты"]];
+const links = [["/catalog", "Каталог"], ["/availability", "Наличие"], ["/pickup", "Самовывоз"], ["/loyalty", "Бонусы"], ["/reviews", "Отзывы"], ["/contacts", "Как нас найти"]];
 
 export function Navigation({ address, cartCount }: { address: string; cartCount: number }) {
   const pathname = usePathname();

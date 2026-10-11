@@ -12,9 +12,9 @@ import { findOwnedOrder, placeOrder } from "@/lib/checkout";
 import { parsePickup, serializable } from "@/lib/orders";
 import { hashPassword, normalizePhone, safeNext, tokenHash, UserFacingError, verifyPassword } from "@/lib/security";
 import type { ActionState } from "@/lib/types";
+import { passwordSchema } from "@/lib/password";
 
 const emailSchema = z.string().trim().toLowerCase().email("Введите корректный email.").max(254);
-const passwordSchema = z.string().min(12, "Пароль должен содержать не менее 12 символов.").max(128, "Пароль слишком длинный.");
 function consent(form: FormData) {
   if (form.get("consent") !== "on") throw new UserFacingError("Подтвердите согласие на обработку данных.");
 }
@@ -49,7 +49,7 @@ export async function registerAction(_state: ActionState, form: FormData) {
 export async function loginAction(_state: ActionState, form: FormData) {
   return run(async () => {
     const email = emailSchema.parse(form.get("email"));
-    const password = z.string().min(1).max(128).parse(form.get("password"));
+    const password = passwordSchema.parse(form.get("password"));
     await rateLimit("login-account", email);
     await rateLimit("login-network", await requestIdentifier(), 100);
     const user = await db.user.findUnique({ where: { email } });
@@ -78,7 +78,7 @@ export async function changePasswordAction(_state: ActionState, form: FormData) 
   return run(async () => {
     const user = await actionUser();
     await rateLimit("change-password", user.id, 5);
-    const currentPassword = z.string().min(1).max(128).parse(form.get("currentPassword"));
+    const currentPassword = passwordSchema.parse(form.get("currentPassword"));
     const password = passwordSchema.parse(form.get("password"));
     const record = await db.user.findUniqueOrThrow({ where: { id: user.id } });
     if (!await verifyPassword(currentPassword, record.passwordHash)) throw new UserFacingError("Текущий пароль неверен.");

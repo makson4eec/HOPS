@@ -46,7 +46,7 @@ export function parsePickup(value: string, timezone: string, open: number, close
     result = new Date(result.getTime() + wall.getTime() - new Date(`${displayed}:00Z`).getTime());
   }
   const hour = Number(value.slice(11, 13));
-  if (formatter.format(result).replace(" ", "T") !== value || hour < open || hour >= close) throw new UserFacingError(`Самовывоз доступен с ${open}:00 до ${close}:00 по времени магазина.`);
+  if (formatter.format(result).replace(" ", "T") !== value || hour < open || hour >= close) throw new UserFacingError(`Самовывоз доступен с ${open}:00 до ${String(close % 24).padStart(2, "0")}:00 по времени магазина.`);
   if (result.getTime() < now.getTime() + 30 * 60_000 || result.getTime() > now.getTime() + 7 * 86400_000) throw new UserFacingError("Выберите время не раньше чем через 30 минут и не позже чем через 7 дней.");
   return result;
 }

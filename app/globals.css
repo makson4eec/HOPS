@@ -33,6 +33,16 @@ body {
 
 body.admin-body { background: #ededeb; }
 
+.age-gate { min-height: 100svh; display: grid; place-items: center; padding: 24px 16px; }
+.age-gate-card { width: min(100%, 480px); padding: clamp(24px, 5vw, 48px); border: 1px solid var(--line); border-radius: 24px; background: var(--surface-solid); box-shadow: var(--shadow); text-align: center; }
+.age-gate-card .brand { padding: 0; border: 0; }
+.age-gate-card .brand::after { display: none; }
+.age-gate-badge { display: grid; place-items: center; width: 100px; height: 100px; margin: 28px auto; border-radius: 50%; background: var(--orange); color: var(--ink); font-size: 2.5rem; font-weight: 800; }
+.age-gate-card h2 { margin: 0 0 16px; font-size: clamp(1.5rem, 5vw, 1.9rem); line-height: 1.2; }
+.age-gate-card p { color: var(--muted); }
+.age-gate-card .button { width: 100%; margin-top: 12px; white-space: normal; }
+.age-gate-card .age-gate-note { margin: 20px 0 0; font-size: .85rem; }
+
 button, input, select, textarea { font: inherit; }
 
 button, a { -webkit-tap-highlight-color: transparent; }
@@ -395,6 +405,11 @@ svg { width: 1.25rem; height: 1.25rem; stroke-width: 1.8; }
 .textarea:focus { border-color: var(--orange); box-shadow: 0 0 0 4px rgba(244,122,0,.1); }
 
 .chip-row { display: flex; flex-wrap: wrap; gap: 8px; }
+.beer-sections { margin-top: 24px; padding: 24px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); }
+.beer-sections h2, .beer-sections h3 { margin: 0 0 12px; }
+.beer-sections h2 { font-size: 1.4rem; }
+.beer-sections h3 { font-size: 1.1rem; }
+.beer-filtration { margin-top: 20px; padding-top: 20px; border-top: 1px solid var(--line); }
 .chip {
   min-height: 38px;
   padding: 0 14px;
@@ -1046,7 +1061,7 @@ body {
 
 .category-rail {
   display: grid;
-  grid-template-columns: repeat(6, minmax(0, 1fr));
+  grid-template-columns: repeat(7, minmax(0, 1fr));
   gap: 9px;
   padding-bottom: 38px;
 }

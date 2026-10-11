@@ -13,6 +13,7 @@
     "test": "node --conditions=react-server --import tsx --test tests/*.test.ts",
     "test:e2e": "playwright test",
     "db:generate": "prisma generate",
+    "db:local": "node scripts/local-db.mjs",
     "db:migrate": "prisma migrate deploy",
     "db:seed": "tsx prisma/seed.ts",
     "admin:create": "tsx scripts/create-admin.ts",

@@ -79,6 +79,8 @@ model Product {
   name        String
   description String        @default("")
   category    String
+  beerColor   String?
+  beerFiltration String?
   categoryId  String?       @map("category_id")
   barcode     String?
   stock       Int           @default(0)
@@ -205,16 +207,16 @@ model Review {
 }
 model ShopSettings {
   id            String @id @default("main")
-  address       String @default("Москва, ул. Складочная, 1с5")
-  shortAddress  String @default("Москва, ул. Складочная, 1с5")
-  phone         String @default("+7 (495) 125–25–05")
-  email         String @default("hallo@hops-store.ru")
-  hoursWeek     String @default("Пн–Пт: 11:00–22:00")
-  hoursWeekend  String @default("Сб–Вс: 11:00–21:00")
+  address       String @default("г. Екатеринбург, ул. Библиотечная, 43")
+  shortAddress  String @default("г. Екатеринбург, ул. Библиотечная, 43")
+  phone         String @default("")
+  email         String @default("")
+  hoursWeek     String @default("Пн–Пт: 11:00–00:00")
+  hoursWeekend  String @default("Сб–Вс: 11:00–00:00")
   announcement  String @default("Самовывоз из магазина — без очереди")
   pickupOpen    Int    @default(11)
-  pickupClose   Int    @default(21)
-  timezone      String @default("Europe/Moscow")
+  pickupClose   Int    @default(24)
+  timezone      String @default("Asia/Yekaterinburg")
   updatedAt     DateTime @db.Timestamptz(3) @updatedAt
 }
 model Document {
