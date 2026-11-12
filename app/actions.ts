@@ -14,11 +14,9 @@ import { parsePickup, serializable } from "@/lib/orders";
 import { hashPassword, normalizePhone, safeNext, tokenHash, UserFacingError, verifyPassword } from "@/lib/security";
 import type { ActionState } from "@/lib/types";
 import { passwordSchema } from "@/lib/password";
+import { acceptLegalForm, recordLegalAcceptance } from "@/lib/legal";
 
 const emailSchema = z.string().trim().toLowerCase().email("Введите корректный email.").max(254);
-function consent(form: FormData) {
-  if (form.get("consent") !== "on") throw new UserFacingError("Подтвердите согласие на обработку данных.");
-}
 async function run(fn: () => Promise<ActionState>): Promise<ActionState> {
   let result: ActionState;
   try { await assertOrigin(); result = await fn(); }
@@ -37,11 +35,16 @@ async function run(fn: () => Promise<ActionState>): Promise<ActionState> {
 export async function registerAction(_state: ActionState, form: FormData) {
   return run(async () => {
     await rateLimit("register", await requestIdentifier(), 10);
-    consent(form);
+    const versions = await acceptLegalForm("account", form);
     const email = emailSchema.parse(form.get("email"));
     const password = passwordSchema.parse(form.get("password"));
     const name = z.string().trim().min(2, "Укажите имя.").max(80).parse(form.get("name"));
-    const user = await db.user.create({ data: { name, email, passwordHash: await hashPassword(password) } });
+    const passwordHash = await hashPassword(password);
+    const user = await db.$transaction(async tx => {
+      const created = await tx.user.create({ data: { name, email, passwordHash } });
+      await recordLegalAcceptance(tx, "account", created.id, created.id, versions);
+      return created;
+    });
     await createSession(user.id, user.passwordHash);
     revalidatePath("/", "layout");
     return { success: true, message: "Кабинет создан.", redirectTo: safeNext(form.get("next")) };
@@ -138,10 +141,10 @@ export async function checkoutAction(_state: ActionState, form: FormData) {
   return run(async () => {
     const user = await actionUser();
     await rateLimit("checkout", user.id, 20);
-    consent(form);
     const checkoutKey = z.string().uuid("Обновите страницу оформления.").parse(form.get("checkoutKey"));
     const duplicate = await findOwnedOrder(checkoutKey, user.id);
     if (duplicate) return { success: true, message: "Заказ уже оформлен.", redirectTo: `/orders?order=${duplicate.id}` };
+    const versions = await acceptLegalForm("checkout", form);
     const cart = await getCart();
     if (!cart?.items.length) throw new UserFacingError("Корзина пуста.");
     const settings = await getSettings();
@@ -153,7 +156,7 @@ export async function checkoutAction(_state: ActionState, form: FormData) {
       name: z.string().trim().min(2, "Укажите имя.").max(80).parse(form.get("name")),
       phone: normalizePhone(z.string().max(30).parse(form.get("phone"))),
       comment: z.string().trim().max(1000).parse(form.get("comment") || ""),
-    });
+    }, versions);
     revalidatePath("/", "layout");
     return { success: true, message: "Заказ на самовывоз оформлен.", redirectTo: `/orders?order=${order.id}` };
   });
@@ -162,19 +165,25 @@ export async function reviewAction(_state: ActionState, form: FormData) {
   return run(async () => {
     const user = await actionUser();
     await rateLimit("review", user.id, 3);
-    consent(form);
+    const versions = await acceptLegalForm("review", form);
     const text = z.string().trim().min(10, "Напишите не менее 10 символов.").max(2000).parse(form.get("text"));
     const rating = z.coerce.number().int().min(1).max(5).parse(form.get("rating"));
-    await db.review.create({ data: { name: user.name, userId: user.id, text, rating } });
+    await db.$transaction(async tx => {
+      const review = await tx.review.create({ data: { name: user.name, userId: user.id, text, rating } });
+      await recordLegalAcceptance(tx, "review", user.id, review.id, versions);
+    });
     return { success: true, message: "Спасибо! Отзыв отправлен на проверку." };
   });
 }
 export async function subscribeAction(_state: ActionState, form: FormData) {
   return run(async () => {
     await rateLimit("subscription", await requestIdentifier(), 10);
-    consent(form);
+    const versions = await acceptLegalForm("newsletter", form);
     const email = emailSchema.parse(form.get("email"));
-    await db.subscription.upsert({ where: { email }, create: { email }, update: {} });
+    await db.$transaction(async tx => {
+      const subscription = await tx.subscription.upsert({ where: { email }, create: { email }, update: { consentAt: new Date() } });
+      await recordLegalAcceptance(tx, "newsletter", subscription.id, subscription.id, versions);
+    });
     return { success: true, message: "Ваш адрес сохранён для уведомлений о поступлениях." };
   });
 }

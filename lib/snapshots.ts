@@ -5,6 +5,8 @@ import { z } from "zod";
 import { atomicWrite, dataDir, privatePath, digest, logError, mutateState, readState } from "./storage";
 import type { SnapshotStatus, State } from "./models";
 
+export const fallbackCatalogSource = "site-fallback";
+export const snapshotCheckMinutes = 30;
 const id = z.string().trim().min(1).max(200);
 const timestamp = z.iso.datetime({ offset: true });
 const metadata = { schema_version: z.literal("1.0"), export_id: id, generated_at: timestamp, complete: z.literal(true) };
@@ -24,7 +26,7 @@ export const catalogProductSchema = z.object({
 }).passthrough();
 export const catalogSchema = z.object({ ...metadata, products: z.array(catalogProductSchema).max(100000) });
 export const loyaltyOperationSchema = z.object({ operationId: id, receiptId: id, kind: z.enum(["ACCRUAL", "REDEMPTION", "REVERSAL"]), amount: z.number().finite().positive().max(1_000_000_000), createdAt: timestamp, status: z.enum(["SUCCESS", "PENDING", "FAILED", "REVERSED"]), description: z.string().max(1000).default("") });
-export const loyaltyCustomerSchema = z.object({ customerId: id, cardId: id, balance: z.number().finite().nonnegative().max(1_000_000_000), updatedAt: timestamp, operations: z.array(loyaltyOperationSchema).max(100000) });
+export const loyaltyCustomerSchema = z.object({ customerId: id, cardId: id, balance: z.number().finite().nonnegative().max(1_000_000_000), updatedAt: timestamp, historyAvailable: z.boolean().optional(), operations: z.array(loyaltyOperationSchema).max(100000) });
 export const loyaltySchema = z.object({ ...metadata, customers: z.array(loyaltyCustomerSchema).max(100000) });
 export type LoyaltyCustomer = z.infer<typeof loyaltyCustomerSchema>;
 
@@ -32,7 +34,16 @@ export function normalizeSnapshot(value: unknown, kind: "catalog" | "loyalty") {
   if (!value || typeof value !== "object") return value;
   const row = value as Record<string, unknown>;
   const result = { ...row, schema_version: row.schema_version ?? row.schemaVersion, export_id: row.export_id ?? row.exportId, generated_at: row.generated_at ?? row.generatedAt ?? row.exportedAt };
-  if (kind === "catalog" && Array.isArray(row.products)) return { ...result, products: row.products.map(product => ({ ...product, unit: product.unit ?? product.stockUnit ?? "pcs" })) };
+  if (kind === "catalog" && Array.isArray(row.products)) {
+    return {
+      ...result,
+      products: row.products.map(product => ({
+        ...product,
+        siteCategory: product.siteCategory === "beer_drink" ? "beer_drinks" : product.siteCategory,
+        unit: product.unit ?? product.stockUnit ?? "pcs",
+      })),
+    };
+  }
   if (kind === "loyalty" && Array.isArray(row.customers)) return { ...result, customers: row.customers.map(customer => ({ ...customer, operations: Array.isArray(customer.operations) ? customer.operations.map((operation: Record<string, unknown>) => ({ ...operation, createdAt: operation.createdAt ?? operation.occurredAt })) : customer.operations })) };
   return result;
 }
@@ -79,8 +90,17 @@ export async function importSnapshot(kind: "catalog" | "loyalty", value: unknown
       const acceptedPolicy = (status as SnapshotStatus & { policy?: string }).policy;
       if (changed || policy !== acceptedPolicy) {
         await archive(kind, state.catalog);
-        for (const old of state.tables.product) if (old.source === "1c") { old.isActive = false; old.stock = 0; old.status = "ARCHIVED"; }
-        for (const stock of state.tables.inventory) if (state.tables.product.some(product => product.id === stock.productId && product.source === "1c")) stock.quantity = 0;
+        const resetIds = new Set<string>();
+        for (const old of state.tables.product) {
+          if (old.source !== "1c" && old.source !== fallbackCatalogSource && !old.manualOverride) continue;
+          resetIds.add(old.id);
+          old.isActive = false;
+          old.stock = 0;
+          old.status = "ARCHIVED";
+          old.manualOverride = false;
+          old.updatedAt = new Date();
+        }
+        for (const stock of state.tables.inventory) if (resetIds.has(stock.productId)) stock.quantity = 0;
         for (const product of products) {
           const now = new Date(), old = state.tables.product.find(row => row.externalId === product.externalId);
           const productId = old?.id || crypto.randomUUID();
@@ -89,7 +109,7 @@ export async function importSnapshot(kind: "catalog" | "loyalty", value: unknown
           const row = { ...product, id: productId, category: product.siteCategory, slug: old?.slug || `p-${digest(product.externalId).slice(0, 32)}`, price: Math.round(product.price * 100), volume: String(product.volume), alcohol: product.alcohol == null ? null : String(product.alcohol), imageUrl: product.imageUrl ?? null, categoryId: product.categoryId, externalId: product.externalId, barcode: product.barcode ?? null, country: product.country ?? null, manufacturer: product.manufacturer ?? null, beerColor: product.beerColor ?? null, beerFiltration: product.beerFiltration ?? null, shelfLifeDays: product.shelfLifeDays ?? null, expiryDate: product.expiryDate ?? null, source: "1c", status: product.isActive ? "PUBLISHED" as const : "ARCHIVED" as const, createdAt: old?.createdAt || now, updatedAt: now, sourceUpdatedAt: new Date(product.updatedAt), priceUpdatedAt: new Date(product.updatedAt), attributes };
           const conflict = state.tables.product.some(item => item.id !== productId && (item.sku === row.sku || item.slug === row.slug));
           if (conflict) throw new Error("CATALOG_CONFLICT");
-          if (old) Object.assign(old, row); else state.tables.product.push(row);
+          if (old) Object.assign(old, row, { manualOverride: false, manualOrderBlocked: false }); else state.tables.product.push(row);
           const inventory = state.tables.inventory.find(item => item.productId === productId && item.warehouseId === "hops-store");
           if (inventory) { inventory.quantity = product.isActive ? product.stock : 0; inventory.sourceUpdatedAt = new Date(product.updatedAt); inventory.updatedAt = now; }
           else state.tables.inventory.push({ id: crypto.randomUUID(), productId, warehouseId: "hops-store", quantity: product.isActive ? product.stock : 0, reserved: 0, createdAt: now, updatedAt: now, sourceUpdatedAt: new Date(product.updatedAt) });
@@ -141,30 +161,38 @@ export async function ownLoyalty(userId: string): Promise<LoyaltyCustomer | null
   if (!user?.externalId || !state.loyalty) return null;
   return loyaltySchema.parse(state.loyalty).customers.find(row => row.customerId === user.externalId) || null;
 }
-let nextCheck = 0;
-let running: Promise<void> | undefined;
-const signatures = new Map<string, string>();
+type SnapshotSync = {
+  nextCheck: number;
+  running?: Promise<void>;
+  signatures: Map<string, string>;
+};
+// Next bundles startup instrumentation and routes separately in the same Node process.
+const runtime = globalThis as typeof globalThis & { hopsSnapshotSync?: SnapshotSync };
+const sync: SnapshotSync = runtime.hopsSnapshotSync ??= { nextCheck: 0, signatures: new Map() };
+
 export async function syncSnapshots(force = false): Promise<void> {
-  if (running) return running;
-  if (!force && Date.now() < nextCheck) return;
-  nextCheck = Date.now() + Math.min(300, Math.max(60, Number(process.env.HOPS_SYNC_SECONDS) || 120)) * 1000;
-  running = (async () => {
+  if (sync.running) return sync.running;
+  const now = Date.now();
+  if (!force && now < sync.nextCheck) return;
+  sync.nextCheck = now + snapshotCheckMinutes * 60_000;
+  sync.running = (async () => {
     for (const kind of ["catalog", "loyalty"] as const) {
       try {
         const file = privatePath(process.env[kind === "catalog" ? "HOPS_CATALOG_FILE" : "HOPS_LOYALTY_FILE"] || path.join(/*turbopackIgnore: true*/ dataDir(), "incoming", `${kind}.json`));
         const stat = await fs.stat(/*turbopackIgnore: true*/ file);
         if (stat.size > 64 * 1024 * 1024) throw new Error("SNAPSHOT_TOO_LARGE");
         const signature = `${stat.mtimeMs}:${stat.size}:${list(process.env.ONE_C_ALLOWED_CATEGORY_IDS).size}:${process.env.ONE_C_ALLOWED_CATEGORY_IDS}:${process.env.ONE_C_ALLOWED_PRODUCT_IDS}`;
-        if (!force && signatures.get(kind) === signature) continue;
+        if (!force && sync.signatures.get(kind) === signature) continue;
         const body = await fs.readFile(/*turbopackIgnore: true*/ file, "utf8");
         const after = await fs.stat(/*turbopackIgnore: true*/ file);
         if (after.size !== stat.size || after.mtimeMs !== stat.mtimeMs) throw new Error("SNAPSHOT_CHANGING");
-        await importSnapshot(kind, JSON.parse(body.replace(/^\uFEFF/, ""))); signatures.set(kind, signature);
+        await importSnapshot(kind, JSON.parse(body.replace(/^\uFEFF/, ""))); sync.signatures.set(kind, signature);
       } catch (error) {
+        sync.signatures.delete(kind);
         await logError(`${kind}-sync`, error);
         await mutateState(state => { state.sync[kind].checkedAt = new Date().toISOString(); state.sync[kind].error = (error as NodeJS.ErrnoException).code === "ENOENT" ? "Файл выгрузки пока не найден." : "Выгрузка отклонена. Используются прежние проверенные данные. Проверьте формат, дату, ID и разрешённые категории."; });
       }
     }
-  })().finally(() => { running = undefined; });
-  return running;
+  })().finally(() => { sync.running = undefined; });
+  return sync.running;
 }

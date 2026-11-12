@@ -3,7 +3,7 @@ import Link from "next/link";
 import type { Product } from "@/lib/models";
 import { canOrder } from "@/lib/purchase-policy";
 import { addToCartAction } from "@/app/actions";
-import { categories, money } from "@/lib/constants";
+import { categories, productPrice } from "@/lib/constants";
 import { ActionForm, SubmitButton } from "./action-form";
 import { Icon } from "./icon";
 
@@ -25,6 +25,6 @@ export function ProductVisual({ product, priority = false }: { product: Pick<Sto
 }
 
 export function ProductCard({ product }: { product: StoreProduct }) {
-  const available = canOrder(product) && availableQuantity(product) > 0 && product.price > 0;
-  return <article className="product-card"><Link href={`/catalog/${product.slug}`} aria-label={product.name}><ProductVisual product={product} /></Link><div className="product-card-body"><ProductStatus product={product} /><h2><Link href={`/catalog/${product.slug}`}>{product.name}</Link></h2><p>{product.volume || categories.find((category) => category.id === product.category)?.title}</p><div className="product-meta"><span className="price">{product.price > 0 ? money(product.price) : "Цена уточняется"}</span>{product.isNew && <span className="status soon">Новинка</span>}</div><ActionForm action={addToCartAction}><input type="hidden" name="productId" value={product.id} /><SubmitButton className="button primary full" disabled={!available}>{available ? "В корзину" : canOrder(product) ? "Пока недоступен" : "Покупка в магазине"}</SubmitButton></ActionForm></div></article>;
+  const available = canOrder(product) && availableQuantity(product) >= 1 && product.price > 0;
+  return <article className="product-card"><Link href={`/catalog/${product.slug}`} aria-label={product.name}><ProductVisual product={product} /></Link><div className="product-card-body"><ProductStatus product={product} /><h2><Link href={`/catalog/${product.slug}`}>{product.name}</Link></h2><p>{product.volume || categories.find((category) => category.id === product.category)?.title}</p><div className="product-meta"><span className="price">{productPrice(product.price, product.unit)}</span>{product.isNew && <span className="status soon">Новинка</span>}</div><ActionForm action={addToCartAction}><input type="hidden" name="productId" value={product.id} /><SubmitButton className="button primary full" disabled={!available}>{available ? "В корзину" : canOrder(product) ? "Пока недоступен" : "Покупка в магазине"}</SubmitButton></ActionForm></div></article>;
 }

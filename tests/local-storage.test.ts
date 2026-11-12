@@ -165,6 +165,32 @@ test("local JSON store, catalog, checkout, recovery and isolation", async t => {
       await restore(saved);
       assert.equal(dataDir(), root);
     });
+    await t.test("file checks wait thirty minutes and still support manual refresh", async t => {
+      const startedAt = Date.now();
+      const clock = t.mock.method(Date, "now", () => startedAt);
+      const incoming = path.join(root, "incoming/catalog.json");
+      async function publish(stock: number, seconds: number) {
+        const time = new Date(startedAt + seconds * 1000).toISOString();
+        await atomicWrite(incoming, catalog([{ ...product("p1", stock), updatedAt: time }], time));
+      }
+
+      await publish(10, 60);
+      await syncSnapshots(true);
+      assert.equal((await readState()).tables.product[0].stock, 10);
+
+      await publish(200, 61);
+      clock.mock.mockImplementation(() => startedAt + 30 * 60_000 - 1);
+      await syncSnapshots();
+      assert.equal((await readState()).tables.product[0].stock, 10);
+
+      clock.mock.mockImplementation(() => startedAt + 30 * 60_000);
+      await syncSnapshots();
+      assert.equal((await readState()).tables.product[0].stock, 200);
+
+      await publish(30, 62);
+      await syncSnapshots(true);
+      assert.equal((await readState()).tables.product[0].stock, 30);
+    });
   } finally {
     process.env.HOPS_DATA_DIR = root;
     await fs.rm(root, { recursive: true, force: true });

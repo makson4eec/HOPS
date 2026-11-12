@@ -1,0 +1,12 @@
+{
+  "store": "Пивотека ХОПС",
+  "warehouse": "Хопс",
+  "priceType": "Розница",
+  "rubles": ["rub", "rur", "643", "руб", "руб."],
+  "bonusProgram": "Бонус 2023",
+  "cardType": "Обычная карта (бонусная)",
+  "groups": [
+    { "name": "Пиво Фасованное", "category": "beer" },
+    { "name": "Пиво разливное", "category": "beer" }
+  ]
+}

@@ -2,9 +2,10 @@ import { canOrder } from "./purchase-policy";
 import { db } from "@/lib/db";
 import { serializable } from "@/lib/orders";
 import { UserFacingError } from "@/lib/security";
+import { recordLegalAcceptance, type LegalVersions } from "./legal";
 
 export type CheckoutInput = { userId: string; cartId: string; checkoutKey: string; warehouseId: string; name: string; phone: string; pickupAt: Date; comment: string; expectedTotal?: number };
-export async function placeOrder(input: CheckoutInput) {
+export async function placeOrder(input: CheckoutInput, versions: LegalVersions = {}) {
   return serializable(async tx => {
     const duplicate = await tx.order.findUnique({ where: { checkoutKey: input.checkoutKey } });
     if (duplicate) {
@@ -32,6 +33,7 @@ export async function placeOrder(input: CheckoutInput) {
     })) } } });
     await tx.cartItem.deleteMany({ where: { cartId: cart.id } });
     await tx.user.update({ where: { id: input.userId }, data: { phone: input.phone } });
+    await recordLegalAcceptance(tx, "checkout", input.userId, order.id, versions);
     return order;
   });
 }
