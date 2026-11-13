@@ -22,7 +22,7 @@ npm.cmd run build
 
 ```powershell
 $env:ADMIN_EMAIL = Read-Host 'Email администратора HOPS'
-$adminSecret = Read-Host 'Пароль администратора HOPS (минимум 16 символов)' -AsSecureString
+$adminSecret = Read-Host 'Пароль администратора HOPS (минимум 8 символов)' -AsSecureString
 $env:ADMIN_PASSWORD = [Net.NetworkCredential]::new('', $adminSecret).Password
 npm.cmd run admin:create
 Remove-Item Env:ADMIN_PASSWORD
