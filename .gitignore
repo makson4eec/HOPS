@@ -2,6 +2,7 @@ node_modules/
 /dist/
 /server.mjs
 .next/
+/next-env.d.ts
 out/
 .env
 .env.*
@@ -12,10 +13,23 @@ playwright-report/
 test-results/
 coverage/
 backups/
+hops-[0-9][0-9][0-9][0-9]-*.json
+/data/
 .tools/
 .test-db/
 .local-db/
+.test-data/
 .DS_Store
 Thumbs.db
 
-.test-data/
+# Local 1C exports and backups
+catalog1.json
+catalog1.json.*
+bonuska.json
+bonuska.json.*
+hops-1c-diagnostics.json
+hops-1c-diagnostics.json.*
+*.[dD][tT]
+*.[cC][fF]
+*.[cC][fF][eE]
+*.[1][cC][dD]

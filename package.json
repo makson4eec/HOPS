@@ -11,7 +11,7 @@
     "build": "next build",
     "start": "node --env-file-if-exists=.env scripts/server.mjs",
     "lint": "eslint . --max-warnings=0",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "next typegen && tsc --noEmit",
     "test": "node --conditions=react-server --import tsx --test tests/*.test.ts",
     "test:e2e": "playwright test",
     "admin:create": "node --env-file=.env --conditions=react-server --import tsx scripts/create-admin.ts",
